@@ -908,7 +908,7 @@ const jellyfinThumbUrl = (id) =>
 // ── Express app ───────────────────────────────────────────────────────────────
 
 const app = express();
-require("./wifi-routes")(app);
+// require("./wifi-routes")(app);
 app.use(express.json());
 app.use(express.static(path.join(BASE_DIR, "public")));
 app.use("/uploads", express.static(UPLOAD_DIR));
