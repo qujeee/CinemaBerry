@@ -248,7 +248,6 @@ class MpvController extends EventEmitter {
     return new Promise((resolve) => {
       exec('pkill -f "mpv.*mpvsocket"', () => {
         setTimeout(() => {
-          const display = process.env.DISPLAY || ":0";
           const args = [
             `--input-ipc-server=${MPV_SOCKET}`,
             "--idle=yes",
@@ -260,11 +259,15 @@ class MpvController extends EventEmitter {
             "--loop-file=no",
             "--keep-open=no",
             "--hwdec=auto",
+            "--vo=drm", // <-- ADDED: Force Direct Rendering Manager for CLI
           ];
+
           this.process = spawn("mpv", args, {
-            env: { ...process.env, DISPLAY: display },
+            // REMOVED: DISPLAY variable injection. Let mpv figure it out via DRM.
+            env: { ...process.env },
             stdio: "ignore",
           });
+
           this.process.on("error", (err) => {
             console.warn(`[mpv] Failed to spawn: ${err.message}`);
             console.warn("      Is mpv installed?  sudo apt install mpv");
