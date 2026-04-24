@@ -259,6 +259,7 @@ class MpvController extends EventEmitter {
             "--image-display-duration=inf",
             "--loop-file=no",
             "--keep-open=no",
+            "--hwdec=auto",
           ];
           this.process = spawn("mpv", args, {
             env: { ...process.env, DISPLAY: display },
