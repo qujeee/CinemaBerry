@@ -79,9 +79,14 @@ fi
 
 # ── 3. Deploy app ─────────────────────────────────────────────────────────────
 section "Application files"
-info "Copying application to ${INSTALL_DIR}…"
 sudo mkdir -p "$INSTALL_DIR"
-sudo cp -r "$SCRIPT_DIR/." "$INSTALL_DIR/"
+# Only copy if we're not already running from inside the install directory
+if [[ "$(realpath "$SCRIPT_DIR")" != "$(realpath "$INSTALL_DIR")" ]]; then
+  info "Copying application to ${INSTALL_DIR}…"
+  sudo cp -r "$SCRIPT_DIR/." "$INSTALL_DIR/"
+else
+  info "Already in ${INSTALL_DIR} — skipping copy"
+fi
 sudo chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR"
 
 info "Installing npm dependencies…"
