@@ -27,7 +27,7 @@ apt-get install -y -q mpv curl pipewire pipewire-pulse pipewire-audio pulseaudio
 # ── 2. Hardware Acceleration & Audio Permissions ──────────────────────────────
 echo "→ Configuring DRM, GPU, and Sound permissions…"
 # Groups required for headless video and background audio
-usermod -aG video,render,audio,pulse,pulse-access "$SERVICE_USER"
+usermod -aG video,render,audio "$SERVICE_USER"
 
 # Enable lingering so PipeWire starts on boot without the user logging in
 loginctl enable-linger "$SERVICE_USER"
