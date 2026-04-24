@@ -8,20 +8,20 @@ Turn your Raspberry Pi into a full cinema pre-show system. Build sequences of pr
 
 ## Requirements
 
-| Component | Details |
-|-----------|---------|
-| Raspberry Pi | 3B+ or newer recommended (Pi 4 ideal) |
-| OS | Raspberry Pi OS with Desktop (Bullseye or Bookworm) |
-| Display | HDMI TV or monitor connected |
-| Network | Pi and control device on same Wi-Fi/LAN |
-| Jellyfin | Running anywhere on your network |
+| Component    | Details                                             |
+| ------------ | --------------------------------------------------- |
+| Raspberry Pi | 3B+ or newer recommended (Pi 4 ideal)               |
+| OS           | Raspberry Pi OS with Desktop (Bullseye or Bookworm) |
+| Display      | HDMI TV or monitor connected                        |
+| Network      | Pi and control device on same Wi-Fi/LAN             |
+| Jellyfin     | Running anywhere on your network                    |
 
 ---
 
 ## Quick Install
 
 ```bash
-git clone https://github.com/yourname/cinemaberry.git
+git clone https://github.com/qujeee/cinemaberry.git
 cd cinemaberry
 bash install.sh
 ```
@@ -50,7 +50,9 @@ npm start
 ## First-Time Setup
 
 ### 1. Connect Jellyfin
+
 Go to **Settings** and enter:
+
 - **Server URL** — e.g. `http://192.168.1.50:8096`
 - **API Key** — create one in Jellyfin → Dashboard → API Keys
 - **User ID** — optional, found in Jellyfin → Users (improves results)
@@ -58,20 +60,23 @@ Go to **Settings** and enter:
 Click **Save Settings**, then **Test Connection**.
 
 ### 2. Upload Your Content
+
 Go to **Uploads** and add files to each category:
 
-| Category | Content |
-|----------|---------|
-| 🎞 Pre-rolls | Video bumpers/idents (play before items) |
-| 📺 Commercials | Ad videos — CinemaBerry picks randomly |
-| 🎥 Trailers | Movie trailers — CinemaBerry picks randomly |
-| 🖼 Welcome Image | Shown on screen when nothing is playing |
-| ☕ Intermission | Shown during intermission breaks |
+| Category         | Content                                     |
+| ---------------- | ------------------------------------------- |
+| 🎞 Pre-rolls     | Video bumpers/idents (play before items)    |
+| 📺 Commercials   | Ad videos — CinemaBerry picks randomly      |
+| 🎥 Trailers      | Movie trailers — CinemaBerry picks randomly |
+| 🖼 Welcome Image | Shown on screen when nothing is playing     |
+| ☕ Intermission  | Shown during intermission breaks            |
 
 ### 3. Build a Sequence
+
 Go to **Sequences** → **New** and add items in order:
 
 Example (matches the default cinema experience):
+
 ```
 Pre-roll 1        → your opening ident
 Commercials Pool  → 2 random from your commercials folder
@@ -84,7 +89,9 @@ Movie             → with auto-intermission at 50%
 Save the sequence with a name like "Standard Cinema".
 
 ### 4. Start a Movie
+
 Go to **Start Movie**:
+
 1. Select your saved sequence
 2. Search your Jellyfin library and click a movie
 3. Hit **Start Cinema Experience**
@@ -93,14 +100,14 @@ Go to **Start Movie**:
 
 ## Playback Controls (Web UI)
 
-| Control | Action |
-|---------|--------|
-| ▶/⏸ | Play / Pause |
-| ⏭ | Skip current item |
-| ⏹ | Stop sequence |
-| 🎞 | Trigger intermission now |
-| Progress bar | Click to seek |
-| Volume slider | Adjust volume |
+| Control       | Action                   |
+| ------------- | ------------------------ |
+| ▶/⏸           | Play / Pause             |
+| ⏭            | Skip current item        |
+| ⏹             | Stop sequence            |
+| 🎞            | Trigger intermission now |
+| Progress bar  | Click to seek            |
+| Volume slider | Adjust volume            |
 
 When paused, the current frame freezes. Use the **🎞 Intermission** button to switch to your intermission image at any time (great for mid-movie toilet breaks).
 
@@ -109,13 +116,17 @@ When paused, the current frame freezes. Use the **🎞 Intermission** button to 
 ## Sequence Item Types
 
 ### Pre-roll
+
 A single video file played in sequence. Use for branded bumpers, studio logos, "please silence your phones" clips, etc.
 
 ### Random Pool
+
 Picks N videos at random from a category (Commercials or Trailers). Each time you start a sequence the picks are reshuffled.
 
 ### Movie
+
 The main feature. Configure:
+
 - **Auto-intermission** — automatically pauses at 50% (or your chosen %) and shows the intermission image
 - Resume from where you left off after intermission
 
