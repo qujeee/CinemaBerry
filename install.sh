@@ -1,6 +1,6 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# CinemaBerry — Install script for Armbian CLI (Orange Pi / Headless)
+# CinemaBerry — Install script for Armbian CLI (Headless Video + Audio)
 # Run as: sudo bash install.sh
 # ─────────────────────────────────────────────────────────────────────────────
 set -e
@@ -10,21 +10,27 @@ SERVICE_USER="${SUDO_USER:-orangepi}"
 INSTALL_DIR="/home/${SERVICE_USER}/cinemaberry"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Get the user's numeric ID (needed for PipeWire/PulseAudio environment variables)
+USER_UID=$(id -u "$SERVICE_USER")
+
 echo ""
-echo "🎬 CinemaBerry CLI Installer"
+echo "🎬 CinemaBerry CLI Installer (A/V Optimized)"
 echo "─────────────────────────────────────────────────────"
-echo "Target User: ${SERVICE_USER}"
+echo "Target User: ${SERVICE_USER} (UID: ${USER_UID})"
 echo "Install Dir: ${INSTALL_DIR}"
 
 # ── 1. System dependencies ────────────────────────────────────────────────────
-echo "→ Installing system dependencies…"
+echo "→ Installing system dependencies (Video & Audio layers)…"
 apt-get update -q
-apt-get install -y -q mpv curl
+apt-get install -y -q mpv curl pipewire pipewire-pulse pipewire-audio pulseaudio-utils
 
-# ── 2. Hardware Acceleration Permissions ──────────────────────────────────────
-echo "→ Configuring DRM and hardware decoding permissions…"
-# These groups are required to let mpv draw directly to the screen via CLI
-usermod -aG video,render "$SERVICE_USER"
+# ── 2. Hardware Acceleration & Audio Permissions ──────────────────────────────
+echo "→ Configuring DRM, GPU, and Sound permissions…"
+# Groups required for headless video and background audio
+usermod -aG video,render,audio,pulse,pulse-access "$SERVICE_USER"
+
+# Enable lingering so PipeWire starts on boot without the user logging in
+loginctl enable-linger "$SERVICE_USER"
 
 # ── 3. Node.js (v20 LTS) ─────────────────────────────────────────────────────
 if ! command -v node &> /dev/null; then
@@ -52,12 +58,12 @@ echo "→ Installing npm dependencies…"
 cd "$INSTALL_DIR"
 sudo -u "$SERVICE_USER" npm install --production
 
-# ── 6. Systemd service (CLI Optimized) ────────────────────────────────────────
+# ── 6. Systemd service (Headless A/V Optimized) ───────────────────────────────
 echo "→ Creating systemd service…"
 cat <<EOF | tee /etc/systemd/system/cinemaberry.service > /dev/null
 [Unit]
 Description=CinemaBerry Cinema Experience Creator
-After=network.target
+After=network.target sound.target
 
 [Service]
 Type=simple
@@ -66,7 +72,11 @@ WorkingDirectory=${INSTALL_DIR}
 ExecStart=/usr/bin/node server.js
 Restart=on-failure
 RestartSec=5
-# No X11 DISPLAY or XAUTHORITY variables needed for DRM/CLI playback
+
+# Injecting headless audio routing variables
+Environment="XDG_RUNTIME_DIR=/run/user/${USER_UID}"
+Environment="PULSE_SERVER=unix:/run/user/${USER_UID}/pulse/native"
+Environment="PIPEWIRE_RUNTIME_DIR=/run/user/${USER_UID}"
 
 [Install]
 WantedBy=multi-user.target
@@ -88,8 +98,8 @@ echo ""
 echo "─────────────────────────────────────────────────────"
 echo "✅ CinemaBerry installed successfully!"
 echo ""
-echo "   NOTE: A system reboot is recommended to apply the"
-echo "   new 'video' and 'render' group permissions."
+echo "   ⚠️ CRITICAL: You MUST REBOOT your system now to apply"
+echo "   the new video/audio group permissions and lingering."
 echo ""
 echo "   Web UI → http://${PI_IP}:3000"
 echo ""
