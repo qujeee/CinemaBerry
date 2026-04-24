@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CinemaBerry 🎬</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <!-- ── Header ── -->
+      <header>
+        <div class="logo">🎬 Cinema<span>Berry</span></div>
+        <div class="status-badge">
+          <div class="status-dot idle" id="statusDot"></div>
+          <span id="statusText">Idle</span>
+        </div>
+      </header>
+
+      <!-- ── Navigation ── -->
+      <nav>
+        <button class="active" data-tab="now-playing">▶ Now Playing</button>
+        <button data-tab="start-movie">🎥 Start Movie</button>
+        <button data-tab="sequences">📋 Sequences</button>
+        <button data-tab="uploads">📤 Uploads</button>
+        <button data-tab="settings">⚙ Settings</button>
+      </nav>
+
+      <!-- ── Main ── -->
+      <main>
+        <!-- NOW PLAYING -->
+        <div class="tab-content active" id="tab-now-playing">
+          <div class="now-playing-hero card">
+            <div id="npStateBadge" class="np-state-badge badge-idle">Idle</div>
+            <div class="np-title" id="npTitle">Welcome to CinemaBerry</div>
+            <div class="np-subtitle" id="npSubtitle">
+              Start a movie to begin the cinema experience
+            </div>
+
+            <div class="progress-wrap" id="progressWrap" style="display: none">
+              <span class="time-label" id="timeCurrent">0:00</span>
+              <div class="progress-bar" id="progressBar">
+                <div
+                  class="progress-fill"
+                  id="progressFill"
+                  style="width: 0%"
+                ></div>
+              </div>
+              <span class="time-label right" id="timeTotal">0:00</span>
+            </div>
+
+            <div class="controls">
+              <button
+                class="btn btn-ghost btn-icon"
+                id="btnPrevious"
+                title="Previous item"
+              >
+                ⏮
+              </button>
+              <button
+                class="btn btn-ghost btn-icon"
+                id="btnSkip"
+                title="Skip item"
+              >
+                ⏭
+              </button>
+              <button
+                class="btn btn-primary btn-icon btn-play"
+                id="btnPlayPause"
+                title="Intermission / Resume"
+              >
+                ▶
+              </button>
+            </div>
+            <div class="controls-row">
+              <div class="volume-wrap">
+                <span>🔊</span>
+                <input
+                  type="range"
+                  id="volumeSlider"
+                  min="0"
+                  max="100"
+                  value="100"
+                  title="Volume"
+                />
+                <span
+                  id="volumeLabel"
+                  style="font-size: 12px; color: var(--muted); min-width: 30px"
+                  >100</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Queue</span>
+              <span
+                id="queueCount"
+                style="font-size: 12px; color: var(--muted)"
+              ></span>
+            </div>
+            <div id="queueList" class="queue-list">
+              <div class="empty-state">
+                <div class="empty-icon">🎬</div>
+                <div>No sequence playing</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- START MOVIE -->
+        <div class="tab-content" id="tab-start-movie">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">1 · Choose a Sequence</span>
+            </div>
+            <div id="smSequenceList" class="seq-list">
+              <div class="empty-state">
+                <div class="empty-icon">📋</div>
+                <div>No sequences yet — create one in the Sequences tab</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">2 · Find a Movie</span>
+            </div>
+            <div class="search-row" style="margin-bottom: 12px">
+              <input
+                id="jellyfinSearch"
+                type="text"
+                placeholder="Search your Jellyfin library…"
+              />
+              <button class="btn btn-ghost" id="btnJellyfinSearch">
+                Search
+              </button>
+            </div>
+            <div id="movieGrid" class="movie-grid"></div>
+          </div>
+
+          <div class="card" id="smStartCard" style="display: none">
+            <div class="card-header">
+              <span class="card-title">3 · Start</span>
+            </div>
+
+            <!-- Audio & subtitle track selectors (populated by renderTrackSelectors()) -->
+            <div id="smTrackSelectors" style="display:none; margin-bottom:14px;">
+              <div class="section-label" style="margin-bottom:8px;">🎚 Track Selection</div>
+              <div style="display:flex; gap:12px; flex-wrap:wrap;">
+                <div class="form-group" id="smAudioRow" style="flex:1; min-width:180px; display:none;">
+                  <label>🔊 Audio Track</label>
+                  <select id="smAudioTrack"></select>
+                </div>
+                <div class="form-group" id="smSubRow" style="flex:1; min-width:180px; display:none;">
+                  <label>💬 Subtitles <span style="color:var(--muted); font-size:11px;">🌐 = external file</span></label>
+                  <select id="smSubtitleTrack"></select>
+                </div>
+              </div>
+            </div>
+            <div
+              id="smSummary"
+              style="margin-bottom: 14px; color: var(--muted); font-size: 13px"
+            ></div>
+            <button
+              class="btn btn-success"
+              id="btnStartSequence"
+              style="width: 100%; justify-content: center; padding: 12px"
+            >
+              🎬 Start Cinema Experience
+            </button>
+          </div>
+        </div>
+
+        <!-- SEQUENCES -->
+        <div class="tab-content" id="tab-sequences">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Saved Sequences</span>
+              <button class="btn btn-primary" id="btnNewSequence">+ New</button>
+            </div>
+            <div id="sequenceList" class="seq-list">
+              <div class="empty-state">
+                <div class="empty-icon">📋</div>
+                <div>No sequences yet</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Builder (hidden until new/edit) -->
+          <div class="card" id="sequenceBuilder" style="display: none">
+            <div class="card-header">
+              <span class="card-title" id="builderTitle">New Sequence</span>
+              <button
+                class="btn btn-ghost btn-icon"
+                id="btnCloseBuilder"
+                title="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 14px">
+              <label>Sequence Name</label>
+              <input
+                id="seqName"
+                type="text"
+                placeholder="e.g. Standard Cinema Experience"
+              />
+            </div>
+
+            <div class="form-group" style="margin-bottom: 14px">
+              <label>Intermission image for this sequence</label>
+              <select id="seqIntermissionImage">
+                <option value="">
+                  Use default (first uploaded intermission image)
+                </option>
+              </select>
+            </div>
+
+            <div class="section-label">Items</div>
+            <div
+              id="builderItems"
+              style="
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                margin-bottom: 12px;
+              "
+            ></div>
+
+            <div
+              style="
+                display: flex;
+                gap: 8px;
+                flex-wrap: wrap;
+                margin-bottom: 16px;
+              "
+            >
+              <button class="btn btn-ghost" id="btnAddPreroll">
+                + Pre-roll
+              </button>
+              <button class="btn btn-ghost" id="btnAddCommercials">
+                + Commercials Pool
+              </button>
+              <button class="btn btn-ghost" id="btnAddTrailers">
+                + Trailers Pool
+              </button>
+              <button class="btn btn-ghost" id="btnAddMovie">+ Movie</button>
+            </div>
+
+            <div style="display: flex; gap: 10px; justify-content: flex-end">
+              <button class="btn btn-ghost" id="btnCancelBuilder">
+                Cancel
+              </button>
+              <button class="btn btn-primary" id="btnSaveSequence">
+                Save Sequence
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- UPLOADS -->
+        <div class="tab-content" id="tab-uploads">
+          <div class="upload-tabs">
+            <div class="upload-tab active" data-ucat="prerolls">
+              🎞 Pre-rolls
+            </div>
+            <div class="upload-tab" data-ucat="commercials">📺 Commercials</div>
+            <div class="upload-tab" data-ucat="trailers">🎥 Trailers</div>
+            <div class="upload-tab" data-ucat="welcome">🖼 Welcome Image</div>
+            <div class="upload-tab" data-ucat="intermission">
+              ☕ Intermission
+            </div>
+          </div>
+
+          <div class="card" id="uploadPanel">
+            <div class="card-header">
+              <span class="card-title" id="uploadCatTitle">Pre-rolls</span>
+              <div
+                class="spinner"
+                id="uploadSpinner"
+                style="display: none"
+              ></div>
+            </div>
+
+            <div class="drop-zone" id="dropZone">
+              <div class="drop-zone-icon" id="dropIcon">📂</div>
+              <div id="dropLabel">Drop files here or click to browse</div>
+              <div
+                style="font-size: 11px; color: var(--muted); margin-top: 4px"
+                id="dropHint"
+              >
+                MP4, MKV, AVI, MOV and more
+              </div>
+              <input
+                type="file"
+                id="fileInput"
+                style="display: none"
+                multiple
+              />
+            </div>
+
+            <div
+              id="imagePreviewWrap"
+              style="display: none; text-align: center"
+            >
+              <img
+                id="imagePreview"
+                class="image-preview"
+                src=""
+                alt="Preview"
+              />
+            </div>
+
+            <div
+              id="welcomePickerWrap"
+              class="form-group"
+              style="display: none; margin-top: 12px"
+            >
+              <label>Welcome image used at startup</label>
+              <select id="welcomeImageSelect"></select>
+              <div
+                id="welcomeImageNote"
+                style="font-size: 11px; color: var(--muted); margin-top: 6px"
+              ></div>
+            </div>
+
+            <div id="uploadFileList" class="file-list"></div>
+          </div>
+        </div>
+
+        <!-- SETTINGS -->
+        <div class="tab-content" id="tab-settings">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Jellyfin Connection</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 12px">
+              <div class="form-group">
+                <label>Server URL</label>
+                <input
+                  id="cfgJellyfinUrl"
+                  type="text"
+                  placeholder="http://192.168.1.x:8096"
+                />
+              </div>
+              <div class="form-group">
+                <label>API Key</label>
+                <input
+                  id="cfgApiKey"
+                  type="text"
+                  placeholder="Your Jellyfin API key"
+                />
+              </div>
+              <div class="form-group">
+                <label
+                  >User ID
+                  <span style="color: var(--muted)"
+                    >(optional — improves results)</span
+                  ></label
+                >
+                <input
+                  id="cfgUserId"
+                  type="text"
+                  placeholder="Your Jellyfin user ID"
+                />
+              </div>
+              <button class="btn btn-primary" id="btnSaveSettings">
+                Save Settings
+              </button>
+              <button class="btn btn-ghost" id="btnTestJellyfin">
+                Test Connection
+              </button>
+              <div
+                id="settingsMsg"
+                style="font-size: 12px; color: var(--muted)"
+              ></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Audio Output</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 12px">
+              <div class="form-group">
+                <label>Playback Device</label>
+                <select id="cfgAudioOutput"></select>
+                <div
+                  id="audioOutputNote"
+                  style="font-size: 11px; color: var(--muted); margin-top: 6px"
+                ></div>
+              </div>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                <button class="btn btn-primary" id="btnSaveAudioOutput">
+                  Apply Output
+                </button>
+                <button class="btn btn-ghost" id="btnRefreshAudioDevices">
+                  Refresh Devices
+                </button>
+              </div>
+
+              <div class="divider"></div>
+
+              <div class="form-group">
+                <label>Bluetooth Devices</label>
+                <select id="btDeviceSelect"></select>
+                <div
+                  id="btDeviceNote"
+                  style="font-size: 11px; color: var(--muted); margin-top: 6px"
+                ></div>
+              </div>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                <button class="btn btn-ghost" id="btnScanBluetooth">
+                  Scan Bluetooth (8s)
+                </button>
+                <button class="btn btn-primary" id="btnConnectBluetooth">
+                  Connect
+                </button>
+                <button class="btn btn-danger" id="btnDisconnectBluetooth">
+                  Disconnect
+                </button>
+              </div>
+              <div
+                id="audioSettingsMsg"
+                style="font-size: 12px; color: var(--muted)"
+              ></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><span class="card-title">About</span></div>
+            <div style="color: var(--muted); font-size: 13px; line-height: 1.8">
+              <p>
+                <strong style="color: var(--text)">CinemaBerry</strong> — Cinema
+                Experience Creator for Raspberry Pi
+              </p>
+              <p>
+                Powered by <strong style="color: var(--gold)">mpv</strong> &amp;
+                <strong style="color: var(--gold)">Jellyfin</strong>
+              </p>
+              <p style="margin-top: 8px">
+                Upload your pre-rolls, commercials and trailers in the
+                <em>Uploads</em> tab, build a sequence in <em>Sequences</em>,
+                then search your library and hit Start.
+              </p>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

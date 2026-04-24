@@ -1,0 +1,16 @@
+# Project-specific ignored paths
+Backup/
+sequences/
+uploads/
+config.json
+
+# Node.js dependencies and logs
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Package manager caches
+.npm/
+.pnpm-store/
