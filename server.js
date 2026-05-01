@@ -248,6 +248,9 @@ class MpvController extends EventEmitter {
     return new Promise((resolve) => {
       exec('pkill -f "mpv.*mpvsocket"', () => {
         setTimeout(() => {
+          // --- UPDATED FOR ARMBIAN CLI ---
+          // X11 DISPLAY variable injection removed. Let DRM handle rendering.
+          const display = process.env.DISPLAY || ":0";
           const args = [
             `--input-ipc-server=${MPV_SOCKET}`,
             "--idle=yes",
@@ -259,14 +262,13 @@ class MpvController extends EventEmitter {
             "--loop-file=no",
             "--keep-open=no",
             "--hwdec=auto",
-            "--vo=drm", // <-- ADDED: Force Direct Rendering Manager for CLI
+            // "--vo=drm", // Enforce Direct Rendering Manager (CLI)
           ];
-
           this.process = spawn("mpv", args, {
-            // REMOVED: DISPLAY variable injection. Let mpv figure it out via DRM.
-            env: { ...process.env },
+            env: { ...process.env, DISPLAY: display }, // Inherit systemd vars directly
             stdio: "ignore",
           });
+          // -------------------------------
 
           this.process.on("error", (err) => {
             console.warn(`[mpv] Failed to spawn: ${err.message}`);
@@ -681,13 +683,12 @@ class SequenceEngine extends EventEmitter {
     if (this.movieFilePath) {
       console.log(this.movieFilePath);
       const rewindPos = Math.max(0, this.savedMoviePos - 30);
-      await this.mpv.loadFile(
-        this.movieFilePath,
-        "replace",
-        this.movieAudioOptions || undefined,
-      );
+      const resumeOptions = this.movieAudioOptions
+        ? `${this.movieAudioOptions},start=${rewindPos}`
+        : `start=${rewindPos}`;
+      await this.mpv.loadFile(this.movieFilePath, "replace", resumeOptions);
       await this.mpv.resume();
-      await sleep(800);
+      await sleep(1200);
       await this.mpv.seek(rewindPos);
 
       // Re-attach external subtitle after seek stabilises

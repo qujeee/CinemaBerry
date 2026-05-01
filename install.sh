@@ -1,110 +1,76 @@
 #!/bin/bash
-# ─────────────────────────────────────────────────────────────────────────────
-# CinemaBerry — Install script for Armbian CLI (Headless Video + Audio)
-# Run as: sudo bash install.sh
-# ─────────────────────────────────────────────────────────────────────────────
+
+# Exit immediately if a command exits with a non-zero status
 set -e
 
-# Automatically detect the user who ran sudo, fallback to 'orangepi'
-SERVICE_USER="${SUDO_USER:-orangepi}"
-INSTALL_DIR="/home/${SERVICE_USER}/cinemaberry"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# ==========================================
+# Configuration Variables
+# ==========================================
+APP_NAME="cinemaberry"
+NODE_VERSION="20"
 
-# Get the user's numeric ID (needed for PipeWire/PulseAudio environment variables)
-USER_UID=$(id -u "$SERVICE_USER")
+# Automatically get the directory where this script is located
+# This ensures the service paths are correct no matter where you cloned the repo
+APP_DIR=$(dirname $(realpath "$0"))
 
-echo ""
-echo "🎬 CinemaBerry CLI Installer (A/V Optimized)"
-echo "─────────────────────────────────────────────────────"
-echo "Target User: ${SERVICE_USER} (UID: ${USER_UID})"
-echo "Install Dir: ${INSTALL_DIR}"
-
-# ── 1. System dependencies ────────────────────────────────────────────────────
-echo "→ Installing system dependencies (Video & Audio layers)…"
-apt-get update -q
-apt-get install -y -q mpv curl pipewire pipewire-pulse pipewire-audio pulseaudio-utils
-
-# ── 2. Hardware Acceleration & Audio Permissions ──────────────────────────────
-echo "→ Configuring DRM, GPU, and Sound permissions…"
-# Groups required for headless video and background audio
-usermod -aG video,render,audio "$SERVICE_USER"
-
-# Enable lingering so PipeWire starts on boot without the user logging in
-loginctl enable-linger "$SERVICE_USER"
-
-# ── 3. Node.js (v20 LTS) ─────────────────────────────────────────────────────
-if ! command -v node &> /dev/null; then
-  echo "→ Installing Node.js 20 LTS…"
-  curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-  apt-get install -y -q nodejs
-else
-  echo "→ Node.js already installed: $(node -v)"
+# Ensure the script is run as root
+if [ "$EUID" -ne 0 ]; then
+  echo "Please run this script with sudo."
+  exit 1
 fi
 
-# ── 4. Copy application files ─────────────────────────────────────────────────
-echo "→ Copying application to ${INSTALL_DIR}…"
-mkdir -p "$INSTALL_DIR"
+echo "🚀 Starting Cinemaberry Installation from $APP_DIR..."
 
-if [[ "$(realpath "$SCRIPT_DIR")" != "$(realpath "$INSTALL_DIR")" ]]; then
-  cp -r "$SCRIPT_DIR/." "$INSTALL_DIR/"
-else
-  echo "Already in ${INSTALL_DIR} — skipping copy"
-fi
+# 1. Update system and install basic dependencies
+echo "📦 Installing system dependencies (mpv, curl, build-essential)..."
+apt-get update
+apt-get install -y curl mpv build-essential
 
-chown -R "${SERVICE_USER}:${SERVICE_USER}" "$INSTALL_DIR"
+# 2. Install Node.js
+echo "🟢 Installing Node.js (Version $NODE_VERSION LTS)..."
+curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash -
+apt-get install -y nodejs
 
-# ── 5. Install npm dependencies ───────────────────────────────────────────────
-echo "→ Installing npm dependencies…"
-cd "$INSTALL_DIR"
-sudo -u "$SERVICE_USER" npm install --production
+# 3. Install NPM packages
+echo "📚 Installing Node.js dependencies..."
+cd "$APP_DIR"
+npm install
 
-# ── 6. Systemd service (Headless A/V Optimized) ───────────────────────────────
-echo "→ Creating systemd service…"
-cat <<EOF | tee /etc/systemd/system/cinemaberry.service > /dev/null
+# 4. Set up the Systemd Service
+echo "⚙️ Creating systemd service for $APP_NAME..."
+cat <<EOF > /etc/systemd/system/$APP_NAME.service
 [Unit]
-Description=CinemaBerry Cinema Experience Creator
-After=network.target sound.target
+Description=Cinemaberry Node.js Media Server
+After=network.target
 
 [Service]
-Type=simple
-User=${SERVICE_USER}
-WorkingDirectory=${INSTALL_DIR}
-ExecStart=/usr/bin/node server.js
-Restart=on-failure
-RestartSec=5
+# Start the server
+ExecStart=/usr/bin/node $APP_DIR/server.js
+WorkingDirectory=$APP_DIR
 
-# Injecting headless audio routing variables
-Environment="XDG_RUNTIME_DIR=/run/user/${USER_UID}"
-Environment="PULSE_SERVER=unix:/run/user/${USER_UID}/pulse/native"
-Environment="PIPEWIRE_RUNTIME_DIR=/run/user/${USER_UID}"
+# Restart configuration
+Restart=always
+RestartSec=3
+
+# Environment variables
+Environment=NODE_ENV=production
+Environment=PORT=3000
+# Uncomment the line below if mpv needs to output to a local screen via HDMI
+# Environment=DISPLAY=:0 
+
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
+# 5. Enable and start the service
+echo "🔄 Reloading systemd and starting $APP_NAME..."
 systemctl daemon-reload
-systemctl enable cinemaberry
-systemctl start cinemaberry
+systemctl enable $APP_NAME
+systemctl restart $APP_NAME
 
-# ── 7. Firewall (optional) ────────────────────────────────────────────────────
-if command -v ufw &> /dev/null; then
-  echo "→ Opening port 3000 in firewall…"
-  ufw allow 3000/tcp > /dev/null 2>&1 || true
-fi
-
-# ── Done ──────────────────────────────────────────────────────────────────────
-PI_IP=$(hostname -I | awk '{print $1}')
-echo ""
-echo "─────────────────────────────────────────────────────"
-echo "✅ CinemaBerry installed successfully!"
-echo ""
-echo "   ⚠️ CRITICAL: You MUST REBOOT your system now to apply"
-echo "   the new video/audio group permissions and lingering."
-echo ""
-echo "   Web UI → http://${PI_IP}:3000"
-echo ""
-echo "   Commands:"
-echo "   sudo systemctl status cinemaberry   # check status"
-echo "   sudo systemctl restart cinemaberry  # restart"
-echo "   sudo journalctl -u cinemaberry -f   # view logs"
-echo "─────────────────────────────────────────────────────"
+echo "✅ Installation complete!"
+echo "🌐 Your Cinemaberry server should now be running on port 3000."
+echo "Check the status using: sudo systemctl status $APP_NAME"
