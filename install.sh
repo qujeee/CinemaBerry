@@ -44,19 +44,22 @@ Description=Cinemaberry Node.js Media Server
 After=network.target
 
 [Service]
-# Start the server
-ExecStart=/usr/bin/node $APP_DIR/server.js
-WorkingDirectory=$APP_DIR
+# RUN AS YOUR DESKTOP USER, NOT ROOT
+User=cinema
+Group=cinema
 
-# Restart configuration
+ExecStart=/usr/bin/node /opt/cinemaberry/server.js
+WorkingDirectory=/opt/cinemaberry
+
 Restart=always
 RestartSec=3
 
-# Environment variables
 Environment=NODE_ENV=production
 Environment=PORT=3000
-# Uncomment the line below if mpv needs to output to a local screen via HDMI
-# Environment=DISPLAY=:0 
+
+# THE MAGIC KEYS FOR X11/XFCE:
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/cinema/.Xauthority
 
 StandardOutput=journal
 StandardError=journal

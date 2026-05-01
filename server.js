@@ -248,8 +248,6 @@ class MpvController extends EventEmitter {
     return new Promise((resolve) => {
       exec('pkill -f "mpv.*mpvsocket"', () => {
         setTimeout(() => {
-          // --- UPDATED FOR ARMBIAN CLI ---
-          // X11 DISPLAY variable injection removed. Let DRM handle rendering.
           const display = process.env.DISPLAY || ":0";
           const args = [
             `--input-ipc-server=${MPV_SOCKET}`,
