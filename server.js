@@ -398,6 +398,7 @@ class MpvController extends EventEmitter {
       }
     } catch (e) {
       console.warn("[mpv] loadfile error:", e.message);
+      return false;
     }
   }
   async pause() {
@@ -432,7 +433,20 @@ class MpvController extends EventEmitter {
         ? config.welcomeImage
         : files[0];
     if (selected) {
-      await this.loadFile(path.join(dir, selected));
+      const fp = path.join(dir, selected);
+      // Retry loading the welcome image for a short period — mpv or X/PA
+      // might not be ready immediately after boot/systemd start.
+      const maxAttempts = 12;
+      for (let i = 0; i < maxAttempts; i++) {
+        try {
+          const ok = await this.loadFile(fp);
+          if (ok) return;
+        } catch (_) {}
+        await sleep(1000);
+      }
+      console.warn(
+        "[mpv] showWelcome: failed to load welcome image after retries",
+      );
     } else {
       // Show nothing / keep idle black screen
       try {
