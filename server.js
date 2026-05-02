@@ -327,7 +327,7 @@ class MpvController extends EventEmitter {
         try {
           await this.cmd("set_property", "ontop", true);
           await this.cmd("set_property", "fullscreen", false);
-          await sleep(200);
+          await sleep(1000);
           await this.cmd("set_property", "fullscreen", true);
         } catch (e) {
           console.warn("[mpv] post-connect properties failed:", e.message);
