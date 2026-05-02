@@ -35,7 +35,7 @@ let config = {
   jellyfinUserId: "",
   welcomeImage: "",
   audioOutput: "",
-  port: 3000,
+  port: 80,
 };
 if (fs.existsSync(CONFIG_FILE)) {
   try {
@@ -260,6 +260,8 @@ class MpvController extends EventEmitter {
             "--loop-file=no",
             "--keep-open=no",
             "--hwdec=auto",
+            "--sub-scale=0.8",
+            "--script-opts-append=osc-visibility=never",
             // "--vo=drm", // Enforce Direct Rendering Manager (CLI)
           ];
           this.process = spawn("mpv", args, {
