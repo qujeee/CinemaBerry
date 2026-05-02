@@ -298,6 +298,17 @@ class MpvController extends EventEmitter {
       this.buffer = "";
       console.log("[mpv] IPC connected");
       this.emit("connected");
+      // Try to ensure the mpv window is above panels and truly fullscreen.
+      (async () => {
+        try {
+          await this.cmd("set_property", "ontop", true);
+          await this.cmd("set_property", "fullscreen", false);
+          await sleep(200);
+          await this.cmd("set_property", "fullscreen", true);
+        } catch (e) {
+          console.warn("[mpv] post-connect properties failed:", e.message);
+        }
+      })();
     });
 
     sock.on("data", (chunk) => {
