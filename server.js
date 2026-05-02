@@ -35,7 +35,7 @@ let config = {
   jellyfinUserId: "",
   welcomeImage: "",
   audioOutput: "",
-  port: 80,
+  port: 3000,
 };
 if (fs.existsSync(CONFIG_FILE)) {
   try {

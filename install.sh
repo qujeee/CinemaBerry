@@ -54,6 +54,8 @@ echo -e "hwdec=drm\ndrm-drmprime-video-plane=primary\ndrm-draw-plane=overlay" | 
 
 success "MPV installed: $(mpv --version | head -1)"
 
+sudo echo "extraargs=cma=256M" >> /boot/armbianEnv.txt
+
 # ── 2. Bluetooth & PulseAudio ───────────────────────────────
 info "Installing Bluetooth stack (bluez) and PulseAudio…"
 apt-get install -y \
