@@ -112,6 +112,30 @@ function parseBluetoothInfoFlags(infoOutput) {
 const SINK_NAME_RE = /^[A-Za-z0-9._:-]+$/;
 const BT_ADDRESS_RE = /^[0-9A-F]{2}(?::[0-9A-F]{2}){5}$/i;
 
+function seedAudioSessionEnv() {
+  if (typeof process.getuid !== "function") return;
+
+  const runtimeDir = `/run/user/${process.getuid()}`;
+  const pulseDir = path.join(runtimeDir, "pulse");
+  const pulseSocket = path.join(pulseDir, "native");
+  const dbusSocket = path.join(runtimeDir, "bus");
+
+  if (!process.env.XDG_RUNTIME_DIR && fs.existsSync(runtimeDir)) {
+    process.env.XDG_RUNTIME_DIR = runtimeDir;
+  }
+  if (!process.env.PULSE_RUNTIME_PATH && fs.existsSync(pulseDir)) {
+    process.env.PULSE_RUNTIME_PATH = pulseDir;
+  }
+  if (!process.env.PULSE_SERVER && fs.existsSync(pulseSocket)) {
+    process.env.PULSE_SERVER = `unix:${pulseSocket}`;
+  }
+  if (!process.env.DBUS_SESSION_BUS_ADDRESS && fs.existsSync(dbusSocket)) {
+    process.env.DBUS_SESSION_BUS_ADDRESS = `unix:path=${dbusSocket}`;
+  }
+}
+
+seedAudioSessionEnv();
+
 async function listAudioDevices() {
   const sinksRes = await runCmd("pactl list short sinks");
   if (!sinksRes.ok) {

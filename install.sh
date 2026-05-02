@@ -207,7 +207,9 @@ Environment="NODE_ENV=production"
 Environment="REAL_USER=${REAL_USER}"
 
 # PulseAudio / D-Bus for the real user
+Environment="XDG_RUNTIME_DIR=/run/user/$(id -u ${REAL_USER})"
 Environment="PULSE_RUNTIME_PATH=/run/user/$(id -u ${REAL_USER})/pulse"
+Environment="PULSE_SERVER=unix:/run/user/$(id -u ${REAL_USER})/pulse/native"
 Environment="DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u ${REAL_USER})/bus"
 
 # 1. Run wifi provisioning (blocks until connected, then exits)
