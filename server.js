@@ -322,17 +322,8 @@ class MpvController extends EventEmitter {
       this.buffer = "";
       console.log("[mpv] IPC connected");
       this.emit("connected");
-      // Try to ensure the mpv window is above panels and truly fullscreen.
-      (async () => {
-        try {
-          await this.cmd("set_property", "ontop", true);
-          await this.cmd("set_property", "fullscreen", false);
-          await sleep(200);
-          await this.cmd("set_property", "fullscreen", true);
-        } catch (e) {
-          console.warn("[mpv] post-connect properties failed:", e.message);
-        }
-      })();
+      // Ensure window is on top and fully fullscreen.
+      this.assertWindowForeground();
     });
 
     sock.on("data", (chunk) => {
@@ -362,6 +353,17 @@ class MpvController extends EventEmitter {
     };
     sock.on("error", reconnect);
     sock.on("close", reconnect);
+  }
+
+  async assertWindowForeground() {
+    try {
+      await this.cmd("set_property", "ontop", true);
+      await this.cmd("set_property", "fullscreen", false);
+      await sleep(100);
+      await this.cmd("set_property", "fullscreen", true);
+    } catch (e) {
+      console.warn("[mpv] assertWindowForeground failed:", e.message);
+    }
   }
 
   cmd(...args) {
@@ -475,7 +477,12 @@ class MpvController extends EventEmitter {
       for (let i = 0; i < maxAttempts; i++) {
         try {
           const ok = await this.loadFile(fp);
-          if (ok) return;
+          if (ok) {
+            // Welcome image loaded — reassert window is on top.
+            await sleep(500);
+            await this.assertWindowForeground();
+            return;
+          }
         } catch (_) {}
         await sleep(1000);
       }
@@ -525,6 +532,7 @@ class SequenceEngine extends EventEmitter {
     this.intermissionImage = "";
     this.movieAudioOptions = ""; // mpv options string (e.g. "aid=2,sid=3")
     this.movieExternalSubUrl = null; // external subtitle URL to add via sub-add
+    this._windowAssertTimer = null; // keep window on top periodically
 
     mpv.on("mpv-event", (e) => this._onMpvEvent(e));
   }
@@ -584,12 +592,27 @@ class SequenceEngine extends EventEmitter {
 
   async start(template, movie) {
     this._stopPosTimer();
+    this._startWindowAssertTimer();
     this.queue = this.resolveSequence(template, movie);
     this.intermissionImage = template?.intermissionImage || "";
     this.currentIndex = -1;
     this.state = "playing";
     this.emit("state-change", this._snapshot());
     await this._next();
+  }
+
+  _startWindowAssertTimer() {
+    this._stopWindowAssertTimer();
+    this._windowAssertTimer = setInterval(() => {
+      this.mpv.assertWindowForeground().catch((_) => {});
+    }, 5000);
+  }
+
+  _stopWindowAssertTimer() {
+    if (this._windowAssertTimer) {
+      clearInterval(this._windowAssertTimer);
+      this._windowAssertTimer = null;
+    }
   }
 
   async _next() {
@@ -827,6 +850,7 @@ class SequenceEngine extends EventEmitter {
 
   async stop() {
     this._stopPosTimer();
+    this._stopWindowAssertTimer();
     this._ignoreEof = true;
     this.queue = [];
     this.currentIndex = -1;
@@ -867,6 +891,7 @@ class SequenceEngine extends EventEmitter {
 
   async _finish() {
     this._stopPosTimer();
+    this._stopWindowAssertTimer();
     this.state = "idle";
     this.currentItem = null;
     await this.mpv.showWelcome();
