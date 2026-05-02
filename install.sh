@@ -52,6 +52,7 @@ apt-get install -y \
     bluez \
     bluez-tools \
     pulseaudio \
+    pulseaudio-utils \
     pulseaudio-module-bluetooth \
     dbus
 

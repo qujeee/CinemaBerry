@@ -283,7 +283,7 @@ class MpvController extends EventEmitter {
             this._connect();
             setTimeout(resolve, 600);
           }, 1500);
-        }, 500);
+        }, 3000);
       });
     });
   }
