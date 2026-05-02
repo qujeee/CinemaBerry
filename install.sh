@@ -39,10 +39,18 @@ info "Project directory:   ${SCRIPT_DIR}"
 
 # ── 1. System update & MPV ──────────────────────────────────
 info "Updating package lists…"
-apt-get update -qq
+sudo apt-get update -qq
+
+info "Setting up custom ffmpeg for Hardware Video Decoding (HVD)…"
+sudo wget http://apt.undo.it:7242/apt.undo.it.asc -O /etc/apt/trusted.gpg.d/apt.undo.it.asc
+. /etc/os-release && echo "deb http://apt.undo.it:7242 $VERSION_CODENAME main" | sudo tee /etc/apt/sources.list.d/apt.undo.it.list
+echo -e "Package: *\nPin: release o=apt.undo.it\nPin-Priority: 600" | sudo tee /etc/apt/preferences.d/apt-undo-it
 
 info "Installing MPV…"
-apt-get install -y mpv
+sudo apt-get install -y ffmpeg mpv 
+
+sudo mkdir -p /etc/mpv
+echo -e "hwdec=drm\ndrm-drmprime-video-plane=primary\ndrm-draw-plane=overlay" | sudo tee /etc/mpv/mpv.conf
 
 success "MPV installed: $(mpv --version | head -1)"
 
@@ -215,7 +223,10 @@ Environment="DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u ${REAL_USER})/
 # 1. Run wifi provisioning (blocks until connected, then exits)
 ExecStartPre=${SCRIPT_DIR}/wifi-check.sh
 
-# 2. Launch server.js as the real user once WiFi is confirmed
+# 2. Wait for X display to be ready and fully responsive
+ExecStartPre=/bin/bash -c 'for i in {1..60}; do DISPLAY=${DISPLAY_NUM} xset q &>/dev/null && exit 0; sleep 1; done; exit 1'
+
+# 3. Launch server.js as the real user once WiFi is confirmed and desktop is ready
 ExecStart=/usr/bin/sudo -u ${REAL_USER} ${NODE_BIN} ${SCRIPT_DIR}/server.js
 
 # Robust restart behaviour
