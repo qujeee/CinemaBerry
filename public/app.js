@@ -20,11 +20,15 @@ const state = {
   currentUcat: "prerolls",
   selectedSeqId: null,
   selectedMovie: null,
+  selectedSeries: null,
+  selectedSeason: null,
   builderItems: [],
   editingSeqId: null,
   prerollFiles: [],
   intermissionFiles: [],
   builderIntermissionImage: "",
+  jellyfinSearchMode: "movie",
+  jellyfinBrowseLevel: "results",
   movieSearchResults: [],
   movieTracks: { audioTracks: [], subtitleTracks: [] },
   selectedAudioTrack: null,
@@ -83,6 +87,20 @@ function fmtSize(bytes) {
   if (bytes < 1024 * 1024 * 1024)
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+function isLiveTvType(type) {
+  return String(type || "")
+    .toLowerCase()
+    .includes("channel");
+}
+
+function jellyfinTypeLabel(type) {
+  if (isLiveTvType(type)) return "Live TV";
+  const normalized = String(type || "").toLowerCase();
+  if (normalized === "episode") return "Episode";
+  if (normalized === "movie") return "Movie";
+  return type || "Item";
 }
 
 // ── Toast ──────────────────────────────────────────────────────────────────────
@@ -156,7 +174,7 @@ function renderNowPlaying() {
     : "Welcome to CinemaBerry";
   document.getElementById("npSubtitle").textContent = item
     ? `Item ${pb.currentIndex + 1} of ${pb.totalItems}`
-    : "Start a movie to begin the cinema experience";
+    : "Start a Jellyfin item to begin the cinema experience";
 
   // Play/pause button
   const isPlaying = pb.state === "playing";
@@ -279,6 +297,10 @@ function getSeqIcon(seq) {
   return "📋";
 }
 
+function getItemTypeLabel(item) {
+  return jellyfinTypeLabel(item?.type);
+}
+
 function summariseSeq(seq) {
   const types = (seq.items || []).map((i) =>
     i.type === "preroll"
@@ -300,53 +322,201 @@ function selectSequence(id) {
 
 // Jellyfin search
 document
+  .getElementById("jellyfinSearchKind")
+  .addEventListener("change", (e) => {
+    state.jellyfinSearchMode = e.target.value || "movie";
+    resetJellyfinBrowse();
+    updateJellyfinSearchControls();
+  });
+document
   .getElementById("btnJellyfinSearch")
   .addEventListener("click", doJellyfinSearch);
 document.getElementById("jellyfinSearch").addEventListener("keydown", (e) => {
   if (e.key === "Enter") doJellyfinSearch();
 });
+document.getElementById("btnJellyfinBack").addEventListener("click", () => {
+  if (state.jellyfinSearchMode !== "tv") return;
+  if (state.jellyfinBrowseLevel === "episodes") {
+    if (state.selectedSeries) loadJellyfinSeasons(state.selectedSeries);
+    return;
+  }
+  if (state.jellyfinBrowseLevel === "seasons") {
+    state.jellyfinBrowseLevel = "results";
+    state.selectedMovie = null;
+    state.selectedSeries = null;
+    state.selectedSeason = null;
+    doJellyfinSearch();
+    return;
+  }
+});
+
+function resetJellyfinBrowse() {
+  state.movieSearchResults = [];
+  state.selectedMovie = null;
+  state.selectedSeries = null;
+  state.selectedSeason = null;
+  state.selectedAudioTrack = null;
+  state.selectedSubtitleTrack = null;
+  state.movieTracks = { audioTracks: [], subtitleTracks: [] };
+  state.jellyfinBrowseLevel = "results";
+  document.getElementById("smStartCard").style.display = "none";
+}
+
+function updateJellyfinSearchControls() {
+  const mode = state.jellyfinSearchMode;
+  const input = document.getElementById("jellyfinSearch");
+  const back = document.getElementById("btnJellyfinBack");
+  if (mode === "movie") {
+    input.placeholder = "Search movies…";
+    back.style.display = "none";
+  } else if (mode === "tv") {
+    input.placeholder = "Search TV shows…";
+    back.style.display =
+      state.jellyfinBrowseLevel === "results" ? "none" : "inline-flex";
+  } else {
+    input.placeholder = "Filter live TV channels…";
+    back.style.display = "none";
+  }
+}
+
+updateJellyfinSearchControls();
 
 async function doJellyfinSearch() {
   const q = document.getElementById("jellyfinSearch").value.trim();
   const el = document.getElementById("movieGrid");
+  const mode = state.jellyfinSearchMode || "movie";
   state.movieSearchResults = [];
+  state.selectedMovie = null;
+  state.selectedSeries = null;
+  state.selectedSeason = null;
+  checkSmReady();
   el.innerHTML =
     '<div class="empty-state"><div class="spinner" style="margin:0 auto"></div></div>';
   try {
-    const movies = await get(`/api/jellyfin/search?q=${encodeURIComponent(q)}`);
-    if (movies.error) {
-      el.innerHTML = `<div class="empty-state" style="color:var(--danger)">${esc(movies.error)}</div>`;
+    const items = await get(
+      `/api/jellyfin/search?kind=${encodeURIComponent(mode)}&q=${encodeURIComponent(q)}`,
+    );
+    if (items.error) {
+      el.innerHTML = `<div class="empty-state" style="color:var(--danger)">${esc(items.error)}</div>`;
       return;
     }
-    if (movies.length === 0) {
+    if (items.length === 0) {
       el.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><div>No results</div></div>`;
       return;
     }
 
-    state.movieSearchResults = movies;
-
-    el.innerHTML = movies
-      .map(
-        (m) => `
-      <div class="movie-card ${state.selectedMovie?.id === m.id ? "selected" : ""}"
-           onclick="selectMovieById('${esc(m.id)}', this)">
-        ${
-          m.thumbUrl
-            ? `<img class="movie-thumb" src="${esc(m.thumbUrl)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
-            : ""
-        }
-        <div class="movie-thumb-placeholder" style="${m.thumbUrl ? "display:none" : ""}">🎬</div>
-        <div class="movie-info">
-          <div class="movie-title">${esc(m.title)}</div>
-          <div class="movie-year">${m.year || ""} ${m.duration ? "· " + fmtTime(m.duration) : ""}</div>
-        </div>
-      </div>
-    `,
-      )
-      .join("");
+    state.movieSearchResults = items;
+    state.jellyfinBrowseLevel = "results";
+    renderJellyfinResults(items);
+    updateJellyfinSearchControls();
   } catch (e) {
     el.innerHTML = `<div class="empty-state" style="color:var(--danger)">Search failed — check Jellyfin settings</div>`;
   }
+}
+
+async function loadJellyfinSeasons(series) {
+  const el = document.getElementById("movieGrid");
+  state.selectedSeries = series;
+  state.selectedSeason = null;
+  state.selectedMovie = null;
+  state.movieTracks = { audioTracks: [], subtitleTracks: [] };
+  state.selectedAudioTrack = null;
+  state.selectedSubtitleTrack = null;
+  state.jellyfinBrowseLevel = "seasons";
+  checkSmReady();
+  el.innerHTML =
+    '<div class="empty-state"><div class="spinner" style="margin:0 auto"></div></div>';
+  try {
+    const seasons = await get(
+      `/api/jellyfin/series/${encodeURIComponent(series.id)}/seasons`,
+    );
+    if (seasons.error) {
+      el.innerHTML = `<div class="empty-state" style="color:var(--danger)">${esc(seasons.error)}</div>`;
+      return;
+    }
+    state.movieSearchResults = seasons;
+    renderJellyfinResults(seasons);
+    updateJellyfinSearchControls();
+  } catch (e) {
+    el.innerHTML = `<div class="empty-state" style="color:var(--danger)">Failed to load seasons</div>`;
+  }
+}
+
+async function loadJellyfinEpisodes(season) {
+  const el = document.getElementById("movieGrid");
+  state.selectedSeason = season;
+  state.selectedMovie = null;
+  state.movieTracks = { audioTracks: [], subtitleTracks: [] };
+  state.selectedAudioTrack = null;
+  state.selectedSubtitleTrack = null;
+  state.jellyfinBrowseLevel = "episodes";
+  checkSmReady();
+  el.innerHTML =
+    '<div class="empty-state"><div class="spinner" style="margin:0 auto"></div></div>';
+  try {
+    const episodes = await get(
+      `/api/jellyfin/seasons/${encodeURIComponent(season.id)}/episodes`,
+    );
+    if (episodes.error) {
+      el.innerHTML = `<div class="empty-state" style="color:var(--danger)">${esc(episodes.error)}</div>`;
+      return;
+    }
+    state.movieSearchResults = episodes;
+    renderJellyfinResults(episodes);
+    updateJellyfinSearchControls();
+  } catch (e) {
+    el.innerHTML = `<div class="empty-state" style="color:var(--danger)">Failed to load episodes</div>`;
+  }
+}
+
+function renderJellyfinResults(items) {
+  const el = document.getElementById("movieGrid");
+  const mode = state.jellyfinSearchMode || "movie";
+  const level = state.jellyfinBrowseLevel || "results";
+  if (!items || items.length === 0) return;
+
+  const selectedId =
+    level === "results"
+      ? mode === "tv"
+        ? state.selectedSeries?.id
+        : state.selectedMovie?.id
+      : level === "seasons"
+        ? state.selectedSeason?.id
+        : state.selectedMovie?.id;
+  el.innerHTML = items
+    .map((item) => {
+      const subtitleParts = [];
+      if (item.year) subtitleParts.push(item.year);
+      if (item.duration) subtitleParts.push(fmtTime(item.duration));
+      subtitleParts.push(getItemTypeLabel(item));
+      if (item.seasonNumber != null && item.episodeNumber != null) {
+        subtitleParts.push(
+          `S${String(item.seasonNumber).padStart(2, "0")} E${String(item.episodeNumber).padStart(2, "0")}`,
+        );
+      }
+      const actionText =
+        mode === "tv" && level === "results"
+          ? "Browse seasons"
+          : mode === "tv" && level === "seasons"
+            ? "Browse episodes"
+            : item.playable === false
+              ? "Browse"
+              : "Select";
+      const isSelected = selectedId === item.id;
+      const canPlay = item.playable !== false;
+      return `
+      <div class="movie-card ${isSelected ? "selected" : ""}" onclick="selectMovieById('${esc(item.id)}', this)">
+        ${item.thumbUrl ? `<img class="movie-thumb" src="${esc(item.thumbUrl)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">` : ""}
+        <div class="movie-thumb-placeholder" style="${item.thumbUrl ? "display:none" : ""}">🎬</div>
+        <div class="movie-info">
+          <div class="movie-title">${esc(item.title)}</div>
+          <div class="movie-year">${subtitleParts.filter(Boolean).join(" · ")}</div>
+        </div>
+        <div style="margin-left:auto;color:${canPlay ? "var(--gold)" : "var(--muted)"};font-size:12px;white-space:nowrap">${actionText}</div>
+      </div>
+    `;
+    })
+    .join("");
 }
 
 async function selectMovieById(id, cardEl) {
@@ -355,9 +525,34 @@ async function selectMovieById(id, cardEl) {
   );
   if (!movie) return;
 
+  const mode = state.jellyfinSearchMode || "movie";
+  const type = String(movie.type || "").toLowerCase();
+
+  if (
+    mode === "tv" &&
+    state.jellyfinBrowseLevel === "results" &&
+    type === "series"
+  ) {
+    await loadJellyfinSeasons(movie);
+    return;
+  }
+
+  if (
+    mode === "tv" &&
+    state.jellyfinBrowseLevel === "seasons" &&
+    type === "season"
+  ) {
+    await loadJellyfinEpisodes(movie);
+    return;
+  }
+
   state.selectedMovie = movie;
   state.selectedAudioTrack = null;
   state.selectedSubtitleTrack = null;
+  state.selectedSeries =
+    state.jellyfinBrowseLevel === "episodes" ? state.selectedSeries : null;
+  state.selectedSeason =
+    state.jellyfinBrowseLevel === "episodes" ? state.selectedSeason : null;
   state.movieTracks = { audioTracks: [], subtitleTracks: [] };
 
   // Refresh grid selection immediately
@@ -368,6 +563,14 @@ async function selectMovieById(id, cardEl) {
 
   // Show step 3 card early so the user sees feedback
   checkSmReady();
+
+  if (mode === "live" || isLiveTvType(movie.type)) {
+    state.selectedAudioTrack = null;
+    state.selectedSubtitleTrack = null;
+    state.movieTracks = { audioTracks: [], subtitleTracks: [] };
+    checkSmReady();
+    return;
+  }
 
   // Fetch audio & subtitle tracks from Jellyfin
   try {
@@ -395,6 +598,7 @@ function checkSmReady() {
     const seq = state.sequences.find((s) => s.id === state.selectedSeqId);
     document.getElementById("smSummary").innerHTML =
       `<strong style="color:var(--gold-hi)">${esc(state.selectedMovie.title)}</strong>
+       <span style="margin-left:8px;color:var(--muted);font-size:12px">${esc(getItemTypeLabel(state.selectedMovie))}</span>
        &nbsp;with sequence&nbsp;
        <strong style="color:var(--gold-hi)">${seq ? esc(seq.name) : ""}</strong>`;
     renderTrackSelectors();
@@ -408,6 +612,11 @@ function renderTrackSelectors() {
   const audioSel = document.getElementById("smAudioTrack");
   const subSel = document.getElementById("smSubtitleTrack");
   if (!wrap || !audioSel || !subSel) return;
+
+  if (isLiveTvType(state.selectedMovie?.type)) {
+    wrap.style.display = "none";
+    return;
+  }
 
   const { audioTracks, subtitleTracks } = state.movieTracks;
 
@@ -469,6 +678,7 @@ document
         title: state.selectedMovie.title,
         jellyfinId: state.selectedMovie.id,
         streamUrl: state.selectedMovie.streamUrl,
+        type: state.selectedMovie.type,
       };
 
       if (state.selectedAudioTrack) {
@@ -506,7 +716,7 @@ document
       toast("Failed to start", "error");
     } finally {
       btn.disabled = false;
-      btn.textContent = "🎬 Start Cinema Experience";
+      btn.textContent = "▶ Start Playback";
     }
   });
 
@@ -1241,12 +1451,12 @@ document
     msg.textContent = "Testing…";
     msg.style.color = "var(--muted)";
     try {
-      const res = await get("/api/jellyfin/search?q=");
+      const res = await get("/api/jellyfin/search?kind=movie&q=");
       if (res.error) {
         msg.textContent = "✗ " + res.error;
         msg.style.color = "var(--danger)";
       } else {
-        msg.textContent = `✓ Connected — ${res.length} movies found`;
+        msg.textContent = `✓ Connected — ${res.length} items found`;
         msg.style.color = "var(--success)";
       }
     } catch (e) {

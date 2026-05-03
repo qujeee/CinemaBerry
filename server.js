@@ -286,6 +286,7 @@ class MpvController extends EventEmitter {
             "--hwdec=auto",
             "--sub-scale=0.8",
             "--script-opts-append=osc-visibility=never",
+            // "--hls-live-edge=10",
             // "--vo=drm", // Enforce Direct Rendering Manager (CLI)
           ];
           this.process = spawn("mpv", args, {
@@ -562,11 +563,13 @@ class SequenceEngine extends EventEmitter {
 
         case "movie": {
           if (!movie) break;
+          console.log(movie.streamUrl);
           items.push({
             type: "movie",
             label: movie.title,
             filePath: movie.streamUrl,
             jellyfinId: movie.jellyfinId,
+            allowIntermission: !isLiveTvType(movie.type),
             intermission: item.intermission || { enabled: false, at: 0.5 },
             audioTrackMpvId: movie.audioTrackMpvId || null,
             subtitleMpvId:
@@ -699,6 +702,7 @@ class SequenceEngine extends EventEmitter {
     const intvl = this.currentItem.intermission;
     if (
       !this.intermissionDone &&
+      this.currentItem?.allowIntermission !== false &&
       intvl?.enabled &&
       pos >= dur * (intvl.at || 0.5)
     ) {
@@ -719,7 +723,11 @@ class SequenceEngine extends EventEmitter {
   }
 
   async triggerManualIntermission() {
-    if (this.state !== "playing") return;
+    if (
+      this.state !== "playing" ||
+      this.currentItem?.allowIntermission === false
+    )
+      return;
     this.savedMoviePos = (await this.mpv.getProp("time-pos")) || 0;
     await this._triggerIntermission();
   }
@@ -933,28 +941,104 @@ const deleteSequence = (id) => {
 
 // ── Jellyfin helpers ──────────────────────────────────────────────────────────
 
-async function jellyfinSearch(query) {
+const isLiveTvType = (type) =>
+  String(type || "")
+    .toLowerCase()
+    .includes("channel");
+
+const jellyfinStreamUrl = (id, type) =>
+  isLiveTvType(type)
+    ? `${config.jellyfinUrl}/Videos/${id}/stream?api_key=${config.jellyfinApiKey}`
+    : `${config.jellyfinUrl}/Videos/${id}/stream?api_key=${config.jellyfinApiKey}&static=true`;
+
+async function jellyfinGet(path, params = {}) {
+  const query = {
+    ...params,
+    api_key: config.jellyfinApiKey,
+  };
+  if (config.jellyfinUserId) query.UserId = config.jellyfinUserId;
+  return axios.get(`${config.jellyfinUrl}${path}`, {
+    params: query,
+    timeout: 10000,
+  });
+}
+
+function mapJellyfinBrowseItem(item) {
+  const type = String(item.Type || "").toLowerCase();
+  const playable = type === "movie" || type === "episode" || isLiveTvType(type);
+  return {
+    id: item.Id,
+    title: item.Name,
+    year: item.ProductionYear,
+    overview: item.Overview,
+    type: item.Type,
+    duration: item.RunTimeTicks
+      ? Math.round(item.RunTimeTicks / 10000000)
+      : null,
+    thumbUrl: jellyfinThumbUrl(item.Id),
+    streamUrl: playable ? jellyfinStreamUrl(item.Id, item.Type) : null,
+    playable,
+    parentId: item.ParentId || null,
+    seasonNumber: item.ParentIndexNumber || null,
+    episodeNumber: item.IndexNumber || null,
+  };
+}
+
+async function jellyfinSearch(kind, query) {
   if (!config.jellyfinUrl || !config.jellyfinApiKey)
     throw new Error("Jellyfin not configured");
+
+  const searchKind = String(kind || "movie").toLowerCase();
+  if (searchKind === "live") {
+    const res = await jellyfinGet("/LiveTv/Channels");
+    const items = res.data.Items || [];
+    const q = String(query || "")
+      .trim()
+      .toLowerCase();
+    return q
+      ? items.filter((item) =>
+          String(item.Name || "")
+            .toLowerCase()
+            .includes(q),
+        )
+      : items;
+  }
+
   const params = {
     searchTerm: query,
-    IncludeItemTypes: "Movie",
-    api_key: config.jellyfinApiKey,
+    IncludeItemTypes: searchKind === "tv" ? "Series" : "Movie",
     Recursive: true,
-    Fields: "Overview,RunTimeTicks",
+    Fields: "Overview,RunTimeTicks,ParentId,IndexNumber,ParentIndexNumber",
     ImageTypeLimit: 1,
     EnableImages: true,
   };
-  if (config.jellyfinUserId) params.UserId = config.jellyfinUserId;
-  const res = await axios.get(`${config.jellyfinUrl}/Items`, {
-    params,
-    timeout: 10000,
+  const res = await jellyfinGet("/Items", params);
+  return res.data.Items || [];
+}
+
+async function jellyfinSeasonItems(seriesId) {
+  const res = await jellyfinGet("/Items", {
+    ParentId: seriesId,
+    IncludeItemTypes: "Season",
+    Recursive: false,
+    Fields: "Overview,RunTimeTicks,ParentId,IndexNumber",
+    ImageTypeLimit: 1,
+    EnableImages: true,
   });
   return res.data.Items || [];
 }
 
-const jellyfinStreamUrl = (id) =>
-  `${config.jellyfinUrl}/Videos/${id}/stream?api_key=${config.jellyfinApiKey}&static=true`;
+async function jellyfinEpisodeItems(seasonId) {
+  const res = await jellyfinGet("/Items", {
+    ParentId: seasonId,
+    IncludeItemTypes: "Episode",
+    Recursive: false,
+    Fields: "Overview,RunTimeTicks,ParentId,IndexNumber,ParentIndexNumber",
+    ImageTypeLimit: 1,
+    EnableImages: true,
+  });
+  return res.data.Items || [];
+}
 
 const jellyfinThumbUrl = (id) =>
   `${config.jellyfinUrl}/Items/${id}/Images/Primary?api_key=${config.jellyfinApiKey}&maxWidth=300`;
@@ -1170,20 +1254,27 @@ app.delete("/api/sequences/:id", (req, res) => {
 
 app.get("/api/jellyfin/search", async (req, res) => {
   try {
-    const items = await jellyfinSearch(req.query.q || "");
-    res.json(
-      items.map((item) => ({
-        id: item.Id,
-        title: item.Name,
-        year: item.ProductionYear,
-        overview: item.Overview,
-        duration: item.RunTimeTicks
-          ? Math.round(item.RunTimeTicks / 10000000)
-          : null,
-        thumbUrl: jellyfinThumbUrl(item.Id),
-        streamUrl: jellyfinStreamUrl(item.Id),
-      })),
-    );
+    const kind = req.query.kind || "movie";
+    const items = await jellyfinSearch(kind, req.query.q || "");
+    res.json(items.map(mapJellyfinBrowseItem));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get("/api/jellyfin/series/:id/seasons", async (req, res) => {
+  try {
+    const items = await jellyfinSeasonItems(req.params.id);
+    res.json(items.map(mapJellyfinBrowseItem));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get("/api/jellyfin/seasons/:id/episodes", async (req, res) => {
+  try {
+    const items = await jellyfinEpisodeItems(req.params.id);
+    res.json(items.map(mapJellyfinBrowseItem));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -1296,9 +1387,10 @@ app.get("/api/playback/state", async (_, res) => {
 
 app.post("/api/playback/start", async (req, res) => {
   try {
-    const { sequenceId, movie } = req.body;
+    const { sequenceId } = req.body;
+    const movie = req.body.movie || req.body.media;
     console.log(
-      `[playback] Start request: sequenceId=${sequenceId || "(none)"}, movieId=${movie?.jellyfinId || "(none)"}, audioTrackMpvId=${movie?.audioTrackMpvId ?? "(default)"}, subtitleMpvId=${movie?.subtitleMpvId ?? "(none)"}, hasExternalSubUrl=${Boolean(movie?.externalSubUrl)}`,
+      `[playback] Start request: sequenceId=${sequenceId || "(none)"}, itemType=${movie?.type || "(unknown)"}, movieId=${movie?.jellyfinId || "(none)"}, audioTrackMpvId=${movie?.audioTrackMpvId ?? "(default)"}, subtitleMpvId=${movie?.subtitleMpvId ?? "(none)"}, hasExternalSubUrl=${Boolean(movie?.externalSubUrl)}`,
     );
     if (movie?.externalSubUrl) {
       console.log(`[playback] External subtitle URL: ${movie.externalSubUrl}`);

@@ -20,7 +20,7 @@
       <!-- ── Navigation ── -->
       <nav>
         <button class="active" data-tab="now-playing">▶ Now Playing</button>
-        <button data-tab="start-movie">🎥 Start Movie</button>
+        <button data-tab="start-movie">🎥 Start Playback</button>
         <button data-tab="sequences">📋 Sequences</button>
         <button data-tab="uploads">📤 Uploads</button>
         <button data-tab="settings">⚙ Settings</button>
@@ -34,7 +34,7 @@
             <div id="npStateBadge" class="np-state-badge badge-idle">Idle</div>
             <div class="np-title" id="npTitle">Welcome to CinemaBerry</div>
             <div class="np-subtitle" id="npSubtitle">
-              Start a movie to begin the cinema experience
+              Start a Jellyfin item to begin the cinema experience
             </div>
 
             <div class="progress-wrap" id="progressWrap" style="display: none">
@@ -125,14 +125,26 @@
 
           <div class="card">
             <div class="card-header">
-              <span class="card-title">2 · Find a Movie</span>
+              <span class="card-title">2 · Find a Jellyfin Item</span>
             </div>
             <div class="search-row" style="margin-bottom: 12px">
+              <select id="jellyfinSearchKind" style="width: fit-content">
+                <option value="movie" selected>Movies</option>
+                <option value="tv">TV Shows</option>
+                <option value="live">Live TV</option>
+              </select>
               <input
                 id="jellyfinSearch"
                 type="text"
                 placeholder="Search your Jellyfin library…"
               />
+              <button
+                class="btn btn-ghost"
+                id="btnJellyfinBack"
+                style="display: none"
+              >
+                Back
+              </button>
               <button class="btn btn-ghost" id="btnJellyfinSearch">
                 Search
               </button>
@@ -146,15 +158,33 @@
             </div>
 
             <!-- Audio & subtitle track selectors (populated by renderTrackSelectors()) -->
-            <div id="smTrackSelectors" style="display:none; margin-bottom:14px;">
-              <div class="section-label" style="margin-bottom:8px;">🎚 Track Selection</div>
-              <div style="display:flex; gap:12px; flex-wrap:wrap;">
-                <div class="form-group" id="smAudioRow" style="flex:1; min-width:180px; display:none;">
+            <div
+              id="smTrackSelectors"
+              style="display: none; margin-bottom: 14px"
+            >
+              <div class="section-label" style="margin-bottom: 8px">
+                🎚 Track Selection
+              </div>
+              <div style="display: flex; gap: 12px; flex-wrap: wrap">
+                <div
+                  class="form-group"
+                  id="smAudioRow"
+                  style="flex: 1; min-width: 180px; display: none"
+                >
                   <label>🔊 Audio Track</label>
                   <select id="smAudioTrack"></select>
                 </div>
-                <div class="form-group" id="smSubRow" style="flex:1; min-width:180px; display:none;">
-                  <label>💬 Subtitles <span style="color:var(--muted); font-size:11px;">🌐 = external file</span></label>
+                <div
+                  class="form-group"
+                  id="smSubRow"
+                  style="flex: 1; min-width: 180px; display: none"
+                >
+                  <label
+                    >💬 Subtitles
+                    <span style="color: var(--muted); font-size: 11px"
+                      >🌐 = external file</span
+                    ></label
+                  >
                   <select id="smSubtitleTrack"></select>
                 </div>
               </div>
@@ -168,7 +198,7 @@
               id="btnStartSequence"
               style="width: 100%; justify-content: center; padding: 12px"
             >
-              🎬 Start Cinema Experience
+              ▶ Start Playback
             </button>
           </div>
         </div>
